@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: retail-order-service-defaults
+  namespace: truvag3-examples
+  labels: {app.kubernetes.io/part-of: retail-order-service}
+data:
+  REDIS_URL: redis://redis.truvag3-examples:6379
+  TRUVAG3_REDIS_NAMESPACE: default
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.truvag3-examples:4318
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: retail-order-service
+  namespace: truvag3-examples
+  labels: {app: retail-order-service, app.kubernetes.io/part-of: retail-order-service}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: retail-order-service}}
+  template:
+    metadata:
+      labels: {app: retail-order-service, component: application, app.kubernetes.io/part-of: retail-order-service}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001}
+      containers:
+        - name: checkout
+          image: retail-order-service:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{name: http, containerPort: 8398}]
+          envFrom:
+            - configMapRef: {name: retail-order-service-defaults}
+            - configMapRef: {name: retail-order-service-runtime}
+            - secretRef: {name: retail-order-service-redis}
+            - secretRef: {name: retail-order-service-auth}
+          env:
+            - {name: OTEL_SERVICE_NAME, value: retail-order-service}
+            - name: ORDER_POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: ORDER_POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+            - name: ORDER_POD_UID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {cpu: 200m, memory: 128Mi}}
+          readinessProbe: {httpGet: {path: /ready, port: http}, initialDelaySeconds: 2, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 10, periodSeconds: 10}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: retail-order-service
+  namespace: truvag3-examples
+  labels: {app.kubernetes.io/part-of: retail-order-service}
+spec:
+  selector: {app: retail-order-service}
+  ports: [{port: 80, targetPort: http}]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: retail-order-service-ingress
+  namespace: truvag3-examples
+  labels: {app.kubernetes.io/part-of: retail-order-service}
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: retail-order-service.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: {service: {name: retail-order-service, port: {number: 80}}}
