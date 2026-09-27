@@ -1,6 +1,6 @@
 package main
 
 func checkout(receipt *Receipt) ledger {
-	unitTotal := receipt.UnitPrice - receipt.Discount
-	return ledger{Total: unitTotal * receipt.Quantity, Writes: 1}
+	total := receipt.UnitPrice*receipt.Quantity - receipt.Discount
+	return ledger{Total: total, Writes: 1}
 }
