@@ -7,7 +7,7 @@ func TestCheckout(t *testing.T) {
 		name                             string
 		price, quantity, discount, total int
 	}{
-		{"one_item", 1000, 1, 0, 1000}, {"multiple_items", 700, 3, 0, 2100}, {"welcome_promotion", 1000, 1, 100, 900},
+		{"one_item", 1000, 1, 0, 1000}, {"multiple_items", 700, 3, 0, 2100}, {"welcome_promotion", 1000, 1, 100, 900}, {"welcome_promotion_multiple_items", 1000, 2, 100, 1900},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := checkout(&Receipt{UnitPrice: tc.price, Quantity: tc.quantity, Discount: tc.discount})
