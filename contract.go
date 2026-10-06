@@ -34,6 +34,10 @@ type Receipt struct {
 	Currency      string    `json:"currency"`
 	LedgerTotal   *int      `json:"ledger_total_cents,omitempty"`
 	LedgerWrites  *int      `json:"ledger_writes,omitempty"`
+
+	// Nil means the attempt predates capture or its JSON could not be decoded.
+	// A present empty string means the caller supplied no promotion.
+	RequestedPromotionCode *string `json:"requested_promotion_code,omitempty"`
 }
 
 type ledger struct {

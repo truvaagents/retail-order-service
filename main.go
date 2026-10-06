@@ -25,7 +25,7 @@ func main() {
 	}
 }
 
-func run(ctx context.Context) error {
+func run(ctx context.Context) (runErr error) {
 	build, err := loadBuildInfo()
 	if err != nil {
 		return err
@@ -59,7 +59,11 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return errors.New("checkout Redis initialization failed")
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			runErr = errors.Join(runErr, errors.New("checkout Redis shutdown failed"))
+		}
+	}()
 	keys, err := core.NewRedisKeyspace(os.Getenv("TRUVAG3_REDIS_NAMESPACE"))
 	if err != nil {
 		return errors.New("invalid checkout namespace")

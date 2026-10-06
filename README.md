@@ -79,6 +79,12 @@ when the order is replayed. The observation's `revision` identifies the serving
 build; `order_revision` identifies the build that priced the accepted order.
 Rejected attempts do not inherit an accepted order's ledger outcome.
 
+Observations retain `requested_promotion_code` from each decoded request before
+order lookup or validation. A present empty string means no promotion was
+submitted; an absent field means unavailable (older observations or undecodable
+JSON). This attempted value is separate from the accepted order's immutable
+request and pricing snapshot, including on replayed or rejected requests.
+
 `GET /observations` requires `start` and `end` in RFC3339 format and `limit` from
 1 to 50. A window must be positive, no longer than ten minutes, within the last
 24 hours, and end no later than now. `truncated` means more entries are available;

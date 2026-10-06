@@ -95,6 +95,64 @@ func TestOrderRetryAndConflict(t *testing.T) {
 	}
 }
 
+func TestAttemptPromotionObservation(t *testing.T) {
+	for _, promotion := range []string{"", "WELCOME100"} {
+		t.Run("promotion_"+promotion, func(t *testing.T) {
+			s, m := testService()
+			request := CheckoutRequest{OrderID: "observed-order", SKU: "COFFEE-250", Quantity: 1, PromotionCode: promotion}
+			for _, wantStatus := range []int{http.StatusCreated, http.StatusOK} {
+				response, receipt := submit(t, s, request)
+				if response.Code != wantStatus || receipt.RequestedPromotionCode == nil || *receipt.RequestedPromotionCode != promotion {
+					t.Fatalf("attempt capture: status=%d receipt=%+v", response.Code, receipt)
+				}
+				stored := m.receipts[receipt.ObservationID]
+				if stored.RequestedPromotionCode == nil || *stored.RequestedPromotionCode != promotion {
+					t.Fatal("attempt promotion missing from stored observation")
+				}
+			}
+			request.Quantity = 2
+			request.PromotionCode = "different-promotion"
+			response, rejected := submit(t, s, request)
+			if response.Code != http.StatusConflict || rejected.RequestedPromotionCode == nil || *rejected.RequestedPromotionCode != request.PromotionCode {
+				t.Fatalf("rejected attempt capture: status=%d receipt=%+v", response.Code, rejected)
+			}
+			if m.orders[request.OrderID].Request.PromotionCode != promotion {
+				t.Fatal("attempt capture changed immutable accepted request")
+			}
+			read := httptest.NewRecorder()
+			s.routes().ServeHTTP(read, httptest.NewRequest(http.MethodGet, "/evidence/"+rejected.ObservationID, nil))
+			var evidence Receipt
+			if err := json.Unmarshal(read.Body.Bytes(), &evidence); err != nil {
+				t.Fatal(err)
+			}
+			if evidence.RequestedPromotionCode == nil || *evidence.RequestedPromotionCode != request.PromotionCode || evidence.LedgerTotal != nil {
+				t.Fatalf("rejected evidence: %+v", evidence)
+			}
+		})
+	}
+}
+
+func TestUnavailableAttemptPromotion(t *testing.T) {
+	s, _ := testService()
+	request := httptest.NewRequest(http.MethodPost, "/orders", strings.NewReader(`{"promotion_code":`))
+	request.Header.Set("Authorization", "Bearer "+s.token)
+	response := httptest.NewRecorder()
+	s.routes().ServeHTTP(response, request)
+	var receipt Receipt
+	if err := json.Unmarshal(response.Body.Bytes(), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusBadRequest || receipt.RequestedPromotionCode != nil {
+		t.Fatalf("undecodable input was reported as captured: %+v", receipt)
+	}
+	if err := json.Unmarshal([]byte(`{"observation_id":"older-observation"}`), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt.RequestedPromotionCode != nil {
+		t.Fatal("older observation acquired an invented promotion")
+	}
+}
+
 func TestAmbiguousCommitReconcilesWithoutSecondWrite(t *testing.T) {
 	s, m := testService()
 	m.commitErr = errors.New("connection lost after commit")

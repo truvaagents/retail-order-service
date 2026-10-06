@@ -71,6 +71,7 @@ func (s *service) createOrder(w http.ResponseWriter, r *http.Request) {
 		s.complete(ctx, w, receipt, http.StatusBadRequest, "invalid_json")
 		return
 	}
+	receipt.RequestedPromotionCode = &request.PromotionCode
 	if !identifier.MatchString(request.OrderID) {
 		s.complete(ctx, w, receipt, http.StatusUnprocessableEntity, "invalid_order")
 		return
