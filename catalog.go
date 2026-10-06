@@ -24,7 +24,7 @@ func priceRequest(request CheckoutRequest) (Product, int, error) {
 	if selected.SKU == "" {
 		return Product{}, 0, errors.New("unknown_product")
 	}
-	if request.Quantity < 1 || request.Quantity >= selected.MaxOrderQuantity {
+	if request.Quantity < 1 || request.Quantity > selected.MaxOrderQuantity {
 		return Product{}, 0, errors.New("invalid_order")
 	}
 	discount := 0
