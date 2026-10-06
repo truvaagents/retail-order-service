@@ -17,6 +17,14 @@ func TestCheckout(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckoutPromotionAppliedOncePerOrder(t *testing.T) {
+	got := checkout(&Receipt{UnitPrice: 2500, Quantity: 5, Discount: 100})
+	if got.Total != 12400 || got.Writes != 1 {
+		t.Fatalf("unexpected order: %+v", got)
+	}
+}
+
 func TestPriceRequest(t *testing.T) {
 	product, discount, err := priceRequest(CheckoutRequest{OrderID: "order-1", SKU: "COFFEE-250", Quantity: 2, PromotionCode: "WELCOME100"})
 	if err != nil || product.UnitPrice != 1000 || product.MaxOrderQuantity != 100 || discount != 100 {
