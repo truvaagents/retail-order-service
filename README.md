@@ -62,8 +62,9 @@ a quantity, and an optional promotion code:
 }
 ```
 
-Prices come from the server catalogue, not the caller. `WELCOME100` is a fixed
-100-cent order promotion. Order IDs accept letters, digits, periods, underscores,
+Prices come from the server catalogue, not the caller. `WELCOME100` subtracts
+100 cents once from the order subtotal, regardless of the number of items.
+Order IDs accept letters, digits, periods, underscores,
 colons, and hyphens, begin with a letter or digit, and have at most 128 characters.
 The catalogue publishes each product's maximum order quantity.
 
