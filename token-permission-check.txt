@@ -1,0 +1,1 @@
+Temporary GitHub token permission verification. No application changes. This diagnostic branch and draft pull request will be cleaned up without merging.
