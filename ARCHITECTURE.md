@@ -72,6 +72,14 @@ Git commit are distinct; uncommitted input is never represented as code from tha
 commit. Runtime configuration cannot override compiled provenance. This mechanism
 is not a signed attestation.
 
+The build resolves a validated GitHub `OWNER/REPOSITORY` identity from `origin`,
+or from the explicit build-time `ORDER_BUILD_REPOSITORY` setting. Invalid explicit
+values fail rather than falling back to upstream. The runtime validator accepts
+well-formed fork identities while retaining envelope, revision and source-digest
+checks. Runtime environment variables cannot replace the embedded identity.
+Consumers remain responsible for matching it to their approved repository and
+confirming that the recorded commit is available there.
+
 This repository owns only `retail-order-service` resources. Its setup script
 reuses the sibling framework's existing Kind infrastructure and does not rebuild,
 restart, or delete other applications. Compilation, vet, and unit tests run with

@@ -13,14 +13,14 @@ Redis, ingress, or observability components.
 
 ```bash
 ./setup.sh help
-cp .env.example .env
+if [ ! -f .env ]; then cp .env.example .env; fi
 # Set any local configuration overrides in .env.
 ./setup.sh build
 ./setup.sh deploy
 ./setup.sh smoke
 ```
 
-Use Go 1.27+, Node.js, Git, Bash, jq, curl, OpenSSL, kubectl, Kind, and a working
+Use Go 1.27.2+, Node.js, Git, Bash, jq, curl, OpenSSL, kubectl, Kind, and a working
 Docker or Podman runtime. The service builds against the published TruvaG3
 `core` and `telemetry` v0.5.0 modules with `GOWORK=off`; it has no local module
 replacement or dependency on a sibling framework checkout for compilation.
@@ -38,6 +38,32 @@ No arguments show help. The script targets `kind-truvag3-demo-$(whoami)` and
 namespace `truvag3-examples`, regardless of the current kubectl context.
 The application listens on container port 8398 and is exposed at
 `http://retail-order-service.localhost`.
+
+### Use a fork or another checkout
+
+Keep the checkout directory named `retail-order-service` beside `truva-g3`.
+Builds derive their `OWNER/REPOSITORY` identity from the GitHub `origin` remote
+(HTTPS, `git@github.com:...`, or `ssh://git@github.com/...`). A fork therefore
+reports its own repository instead of upstream. For an offline mirror or an
+explicitly chosen identity, configure this in `.env` before building:
+
+```dotenv
+ORDER_BUILD_REPOSITORY=YOUR_OWNER/retail-order-service
+```
+
+Only a valid GitHub `OWNER/REPOSITORY` value is accepted; empty explicit values,
+URLs and credentials fail the build. Without an override, an absent or unsupported
+origin also fails. The identity is embedded in the binary. `rollout` or a runtime
+environment change cannot rewrite it; use `setup.sh build`/`deploy`/`rebuild`.
+The application module path may remain upstream; this repository builds a binary,
+not a library consumed by the maintenance agents.
+
+After deployment, inspect `GET /build-info`. Its repository must agree with your
+maintenance profiles, and its `git_revision` must exist in that repository.
+Commit reviewed source before a provenance-dependent maintenance run:
+uncommitted build inputs correctly report `source_matches_commit: false`.
+The build identity is evidence, not signed attestation or proof of GitHub access.
+Never put credentials in a Git remote URL or the repository identity.
 
 ## API
 
@@ -105,6 +131,40 @@ Setup generates and preserves `retail-order-service-auth`, containing
 unauthenticated in this local deployment: restrict network access and do not use
 customer or payment data without an appropriate authorization and storage policy.
 The container has no GitHub credentials or Kubernetes service-account token.
+
+Authorized local clients can retrieve the generated order token without printing
+it. Run this in a trusted Bash session with shell tracing disabled, replacing the
+cluster name if necessary:
+
+```bash
+set +x
+ORDER_API_TOKEN="$(
+  set -euo pipefail
+  kubectl --context "kind-truvag3-demo-$(whoami)" --namespace truvag3-examples \
+    get secret retail-order-service-auth -o json |
+    jq -er '.data.ORDER_API_TOKEN | select(type == "string" and length > 0) | @base64d'
+)"
+export ORDER_API_TOKEN
+# Use the credential in your local client without echoing it or embedding it in URLs.
+# Remove it when finished:
+unset ORDER_API_TOKEN
+```
+
+### Sharing the source safely
+
+Making this GitHub repository public is separate from exposing its running HTTP
+service. Keep the local ingress, Redis and unauthenticated read endpoints off the
+public Internet. Use synthetic orders only; this service is not a payment system.
+
+Before changing repository visibility, review all branches and Git history for
+credentials, private operator data and generated evidence, plus GitHub PR content,
+Actions logs and release assets. Keep `.env`, tokens and live captures untracked;
+the `.gitignore` and isolated build allowlist are safeguards, not proof that
+history is clean. Run the prescribed build/tests and `govulncheck` using the
+patched Go toolchain, and choose an explicit source license before distribution.
+Repository visibility, licensing, branch permissions and any publication action
+remain maintainer decisions. A fork's credentials and full maintenance workflow
+must be verified independently.
 
 ## Observability and provenance
 
