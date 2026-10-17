@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 )
 
 // setup.sh replaces the placeholder only inside the isolated build snapshot.
@@ -32,6 +33,15 @@ type BuildInfo struct {
 var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var gitRevisionPattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
 var frameworkVersionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+var buildRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9._-]{1,100}$`)
+
+func validBuildRepository(repository string) bool {
+	if !buildRepositoryPattern.MatchString(repository) {
+		return false
+	}
+	owner, name, _ := strings.Cut(repository, "/")
+	return !strings.Contains(owner, "--") && name != "." && name != ".."
+}
 
 func loadBuildInfo() (BuildInfo, error) {
 	return parseBuildInfo(compiledBuild)
@@ -41,7 +51,7 @@ func parseBuildInfo(data []byte) (BuildInfo, error) {
 	var info BuildInfo
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
-	if len(data) > 2048 || d.Decode(&info) != nil || info.SchemaVersion != 1 || info.Repository != "truvaagents/retail-order-service" || !sha256Pattern.MatchString(info.SourceSHA256) || !gitRevisionPattern.MatchString(info.GitRevision) || !frameworkVersionPattern.MatchString(info.FrameworkVersion) {
+	if len(data) > 2048 || d.Decode(&info) != nil || info.SchemaVersion != 1 || !validBuildRepository(info.Repository) || !sha256Pattern.MatchString(info.SourceSHA256) || !gitRevisionPattern.MatchString(info.GitRevision) || !frameworkVersionPattern.MatchString(info.FrameworkVersion) {
 		return info, errors.New("invalid build identity; build through setup.sh")
 	}
 	var extra any

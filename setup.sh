@@ -24,6 +24,40 @@ load_config() {
     if [ -f "$SCRIPT_DIR/.env" ]; then set -a; source "$SCRIPT_DIR/.env"; set +a; fi
 }
 
+validate_build_repository() {
+    local repository="$1" owner name
+    if [[ "$repository" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9._-]{1,100}$ ]]; then
+        owner="${repository%%/*}"; name="${repository#*/}"
+        [[ "$owner" == *--* || "$name" == . || "$name" == .. ]] || return 0
+    fi
+    printf 'Build repository must be a GitHub OWNER/REPOSITORY identity, not a URL or credential.\n' >&2
+    return 1
+}
+
+resolve_build_repository() {
+    local repository origin
+    if [[ "${ORDER_BUILD_REPOSITORY+x}" == x ]]; then
+        repository="$ORDER_BUILD_REPOSITORY"
+    else
+        origin="$(git -C "$SCRIPT_DIR" config --get remote.origin.url)" || {
+            printf 'No Git origin is configured; set ORDER_BUILD_REPOSITORY explicitly before building.\n' >&2
+            return 1
+        }
+        case "$origin" in
+            https://github.com/*) repository="${origin#https://github.com/}" ;;
+            git@github.com:*) repository="${origin#git@github.com:}" ;;
+            ssh://git@github.com/*) repository="${origin#ssh://git@github.com/}" ;;
+            *)
+                printf 'Git origin is not a supported GitHub URL; set ORDER_BUILD_REPOSITORY explicitly.\n' >&2
+                return 1
+                ;;
+        esac
+        repository="${repository%.git}"
+    fi
+    validate_build_repository "$repository" || return 1
+    printf '%s\n' "$repository"
+}
+
 require_cluster() {
     kind get clusters | grep -Fxq "$CLUSTER_NAME" || {
         printf 'Bootstrap the existing %s cluster through the framework first.\n' "$CLUSTER_NAME" >&2; return 1;
@@ -42,8 +76,9 @@ cleanup_snapshot() {
 }
 
 prepare_snapshot() {
-    local framework_version core_version telemetry_version git_revision file source_sha revision matches=true
+    local framework_version core_version telemetry_version git_revision file source_sha revision repository matches=true
     command -v jq >/dev/null
+    repository="$(resolve_build_repository)"
     core_version="$(cd "$SCRIPT_DIR" && GOWORK=off go list -m -f '{{.Version}}' github.com/truvaagents/truva-g3/core)"
     telemetry_version="$(cd "$SCRIPT_DIR" && GOWORK=off go list -m -f '{{.Version}}' github.com/truvaagents/truva-g3/telemetry)"
     [ "$core_version" = "$telemetry_version" ] || {
@@ -80,8 +115,9 @@ prepare_snapshot() {
         cd "$BUILD_CONTEXT_DIR/retail-order-service"
         source_sha="$(printf '%s\n' "${files[@]}" | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256 | awk '{print $1}')"
         revision="$(printf '%s\n%s\n' "$source_sha" "$framework_version" | shasum -a 256 | awk '{print $1}')"
-        jq -n --arg source "$source_sha" --arg git "$git_revision" --arg framework "$framework_version" --arg revision "build-$revision" --argjson matches "$matches" \
-            '{schema_version:1,repository:"truvaagents/retail-order-service",revision:$revision,source_sha256:$source,git_revision:$git,source_matches_commit:$matches,framework_version:$framework}' > build-info.json
+        jq -n --arg repository "$repository" --arg source "$source_sha" --arg git "$git_revision" --arg framework "$framework_version" --arg revision "build-$revision" --argjson matches "$matches" \
+            '{schema_version:1,repository:$repository,revision:$revision,source_sha256:$source,git_revision:$git,source_matches_commit:$matches,framework_version:$framework}' > build-info.json
+        printf 'Build repository: %s\n' "$repository"
         printf 'Target build: build-%s\nSource inputs match Git %s: %s\nFramework modules: %s\n' "$revision" "$git_revision" "$matches" "$framework_version"
     )
 }
@@ -111,12 +147,16 @@ configure() {
 }
 
 smoke() {
-    local token
+    local token repository
     command -v node >/dev/null
+    repository="$(resolve_build_repository)"
     token="$(kubectl get secret retail-order-service-auth -n "$NAMESPACE" -o json | jq -r '.data.ORDER_API_TOKEN | @base64d')"
-    ORDER_TEST_TOKEN="$token" node "$SCRIPT_DIR/smoke.mjs"
+    ORDER_TEST_REPOSITORY="$repository" ORDER_TEST_TOKEN="$token" node "$SCRIPT_DIR/smoke.mjs"
     unset token
 }
+
+# Sourcing exposes helpers for offline checks without loading .env or deploying.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
 
 [ "$#" -le 1 ] || { usage >&2; exit 2; }
 case "${1:-help}" in
@@ -125,7 +165,7 @@ case "${1:-help}" in
     *) usage >&2; exit 2 ;;
 esac
 case "$verb" in
-    build|deploy|rebuild|rollout) load_config ;;
+    build|deploy|rebuild|rollout|smoke) load_config ;;
 esac
 if [ "$verb" = build ]; then
     prepare_snapshot

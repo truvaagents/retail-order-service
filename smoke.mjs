@@ -4,6 +4,8 @@ import {randomUUID} from 'node:crypto';
 const base = 'http://retail-order-service.localhost';
 const token = process.env.ORDER_TEST_TOKEN;
 assert.ok(token?.length >= 32, 'checkout test credential required');
+const repository = process.env.ORDER_TEST_REPOSITORY;
+assert.ok(repository, 'expected build repository required; run through setup.sh smoke');
 const orders = [];
 
 async function request(path, body, authorized = true) {
@@ -20,7 +22,7 @@ async function request(path, body, authorized = true) {
 
 const build = await request('/build-info');
 assert.equal(build.status, 200);
-assert.equal(build.data.repository, 'truvaagents/retail-order-service');
+assert.equal(build.data.repository, repository);
 assert.match(build.data.revision, /^build-[a-f0-9]{64}$/);
 assert.ok(build.data.pod_uid);
 const start = new Date(Date.parse(build.headers.get('date')) - 1000).toISOString();
