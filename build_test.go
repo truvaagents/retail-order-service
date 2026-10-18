@@ -80,7 +80,7 @@ func TestSetupBuildRepository(t *testing.T) {
 					t.Fatalf("configure fixture: %s: %v", output, err)
 				}
 			}
-			command := exec.Command("bash", "-c", `source "$1"; SCRIPT_DIR="$2"; resolve_build_repository`, "bash", script, directory)
+			command := exec.Command("bash", "-c", `whoami() { printf "unexpected username lookup\n" >&2; return 1; }; source "$1"; SCRIPT_DIR="$2"; resolve_build_repository`, "bash", script, directory)
 			for _, variable := range os.Environ() {
 				if !strings.HasPrefix(variable, "ORDER_BUILD_REPOSITORY=") {
 					command.Env = append(command.Env, variable)

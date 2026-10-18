@@ -3,8 +3,6 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 FRAMEWORK_ROOT="$(dirname "$SCRIPT_DIR")/truva-g3"
-CLUSTER_NAME="truvag3-demo-$(whoami)"
-KIND_CONTEXT="kind-$CLUSTER_NAME"
 NAMESPACE=truvag3-examples
 BUILD_CONTEXT_DIR=''
 
@@ -58,7 +56,20 @@ resolve_build_repository() {
     printf '%s\n' "$repository"
 }
 
+initialize_cluster() {
+    if [ -z "${CLUSTER_NAME:-}" ]; then
+        local username
+        if ! username="$(whoami 2>/dev/null)" || [ -z "$username" ]; then
+            printf 'Cannot resolve username; set CLUSTER_NAME explicitly for cluster commands.\n' >&2
+            return 1
+        fi
+        CLUSTER_NAME="truvag3-demo-$username"
+    fi
+    KIND_CONTEXT="kind-$CLUSTER_NAME"
+}
+
 require_cluster() {
+    initialize_cluster
     kind get clusters | grep -Fxq "$CLUSTER_NAME" || {
         printf 'Bootstrap the existing %s cluster through the framework first.\n' "$CLUSTER_NAME" >&2; return 1;
     }
@@ -164,9 +175,7 @@ case "${1:-help}" in
     build|deploy|rebuild|rollout|smoke|status|logs) verb="$1" ;;
     *) usage >&2; exit 2 ;;
 esac
-case "$verb" in
-    build|deploy|rebuild|rollout|smoke) load_config ;;
-esac
+load_config
 if [ "$verb" = build ]; then
     prepare_snapshot
     (cd "$BUILD_CONTEXT_DIR/retail-order-service" && GOWORK=off GOFLAGS=-mod=readonly go build ./... && GOWORK=off go vet ./... && GOWORK=off go test ./...)

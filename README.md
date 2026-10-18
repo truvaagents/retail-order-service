@@ -34,8 +34,11 @@ replacement or dependency on a sibling framework checkout for compilation.
 | `smoke` | Exercise the real order API, persistence, retries, and validation |
 | `status` / `logs` | Inspect this service |
 
-No arguments show help. The script targets `kind-truvag3-demo-$(whoami)` and
-namespace `truvag3-examples`, regardless of the current kubectl context.
+No arguments show help. Cluster commands default to `kind-truvag3-demo-$(whoami)`
+and namespace `truvag3-examples`, regardless of the current kubectl context. Set
+`CLUSTER_NAME` in the environment or `.env` to select another existing Kind
+cluster; its context is `kind-$CLUSTER_NAME`. Help, offline builds, and sourcing
+repository helpers do not require username lookup or cluster access.
 The application listens on container port 8398 and is exposed at
 `http://retail-order-service.localhost`.
 
