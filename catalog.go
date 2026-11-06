@@ -17,7 +17,7 @@ func priceRequest(request CheckoutRequest) (Product, int, error) {
 	var selected Product
 	for _, product := range catalog {
 		if product.SKU == request.SKU {
-			selected = catalog[0]
+			selected = product
 			break
 		}
 	}
