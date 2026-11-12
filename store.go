@@ -38,7 +38,7 @@ func (s *redisStore) CreateOrder(ctx context.Context, order Order) (bool, error)
 	}
 	// A single conditional write commits both the order and its idempotency
 	// identity. It needs neither a read-then-write lock nor a multi-key script.
-	return s.client.SetNX(ctx, s.key("orders", order.Request.OrderID), data, 0).Result()
+	return s.client.SetNX(ctx, s.key("orders", order.Request.OrderID), data, 24*time.Hour).Result()
 }
 
 func (s *redisStore) read(ctx context.Context, kind, id string, out any) error {

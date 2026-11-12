@@ -48,9 +48,8 @@ func (s *service) routes() http.Handler {
 func requestDigest(request CheckoutRequest) string {
 	identity := struct {
 		OrderID  string `json:"order_id"`
-		SKU      string `json:"sku"`
 		Quantity int    `json:"quantity"`
-	}{OrderID: request.OrderID, SKU: request.SKU, Quantity: request.Quantity}
+	}{OrderID: request.OrderID, Quantity: request.Quantity}
 	data, _ := json.Marshal(identity)
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
