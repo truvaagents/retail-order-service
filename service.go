@@ -72,11 +72,12 @@ func (s *service) createOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	receipt.RequestedPromotionCode = &request.PromotionCode
+	receipt.SKU, receipt.Quantity = request.SKU, request.Quantity
 	if !identifier.MatchString(request.OrderID) {
 		s.complete(ctx, w, receipt, http.StatusUnprocessableEntity, "invalid_order")
 		return
 	}
-	receipt.OrderID, receipt.SKU, receipt.Quantity = request.OrderID, request.SKU, request.Quantity
+	receipt.OrderID = request.OrderID
 	digest := requestDigest(request)
 	// Check request identity before today's catalogue so an accepted order can
 	// still be replayed after prices or promotion availability change.

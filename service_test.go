@@ -153,6 +153,21 @@ func TestUnavailableAttemptPromotion(t *testing.T) {
 	}
 }
 
+func TestDecodedAttemptFields(t *testing.T) {
+	s, m := testService()
+	w, receipt := submit(t, s, CheckoutRequest{OrderID: "invalid/id", SKU: "TEA-100", Quantity: 4, PromotionCode: "WELCOME100"})
+	if w.Code != http.StatusUnprocessableEntity || receipt.SKU != "TEA-100" || receipt.Quantity != 4 || receipt.OrderID != "" {
+		t.Fatalf("attempt fields: status=%d receipt=%+v", w.Code, receipt)
+	}
+	stored := m.receipts[receipt.ObservationID]
+	if stored.SKU != receipt.SKU || stored.Quantity != receipt.Quantity || stored.RequestedPromotionCode == nil || *stored.RequestedPromotionCode != "WELCOME100" {
+		t.Fatalf("stored attempt: %+v", stored)
+	}
+	if len(m.orders) != 0 {
+		t.Fatal("rejected attempt created an order")
+	}
+}
+
 func TestAmbiguousCommitReconcilesWithoutSecondWrite(t *testing.T) {
 	s, m := testService()
 	m.commitErr = errors.New("connection lost after commit")

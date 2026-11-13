@@ -29,23 +29,25 @@ const start = new Date(Date.parse(build.headers.get('date')) - 1000).toISOString
 assert.equal((await request('/orders', {}, false)).status, 401);
 const catalogue = await request('/catalog');
 assert.equal(catalogue.status, 200);
-assert.equal(catalogue.data.length, 3);
+assert.equal(catalogue.data.length, 5);
 
-for (const input of [
-  {sku: 'COFFEE-250', quantity: 1},
-  {sku: 'FILTER-100', quantity: 3},
-  {sku: 'COFFEE-250', quantity: 1, promotion_code: 'WELCOME100'},
+for (const {total, ...input} of [
+  {sku: 'COFFEE-250', quantity: 1, total: 1000},
+  {sku: 'FILTER-100', quantity: 3, total: 2100},
+  {sku: 'COFFEE-250', quantity: 3, promotion_code: 'WELCOME100', total: 2900},
+  {sku: 'COFFEE-250', quantity: 12, total: 11400},
+  {sku: 'TEA-100', quantity: 8, promotion_code: 'SAVE10', total: 6300},
+  {sku: 'MUG-350', quantity: 2, promotion_code: 'MUG15', total: 4250},
 ]) {
   const body = {order_id: randomUUID(), ...input};
   const created = await request('/orders', body);
+  console.log(JSON.stringify({order_id: body.order_id, observation_id: created.data?.observation_id, trace_id: created.data?.target_trace_id, http_status: created.status}));
   assert.equal(created.status, 201);
   assert.equal(created.data.order_id, body.order_id);
   assert.equal(created.data.operation, 'create_order');
   assert.equal(created.data.revision, build.data.revision);
   assert.match(created.data.target_trace_id, /^[a-f0-9]{32}$/);
   assert.equal(created.headers.get('x-request-id'), created.data.observation_id);
-  const product = catalogue.data.find(p => p.sku === body.sku);
-  const total = product.unit_price_cents * body.quantity - (body.promotion_code ? 100 : 0);
   assert.equal(created.data.ledger_total_cents, total);
   const stored = await request('/orders/' + body.order_id);
   assert.equal(stored.status, 200);

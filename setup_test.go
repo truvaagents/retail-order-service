@@ -8,6 +8,79 @@ import (
 	"testing"
 )
 
+func TestSetupCheckSnapshot(t *testing.T) {
+	script, err := os.ReadFile("setup.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, failAt := range []string{"", "build", "vet", "test"} {
+		t.Run("failure="+failAt, func(t *testing.T) {
+			directory := t.TempDir()
+			source := filepath.Join(directory, "source")
+			binaries := filepath.Join(directory, "bin")
+			for _, name := range []string{source, binaries} {
+				if err := os.Mkdir(name, 0o750); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(source, "setup.sh"), script, 0o440); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(source, ".env"), []byte("exit 97\n"), 0o440); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"git", "kind", "kubectl"} {
+				if err := os.WriteFile(filepath.Join(binaries, name), []byte("#!/bin/sh\nexit 98\n"), 0o750); err != nil {
+					t.Fatal(err)
+				}
+			}
+			goStub := `#!/bin/sh
+[ "$GOWORK" = off ] || exit 91
+case "$GOFLAGS" in *-mod=readonly*) ;; *) exit 92 ;; esac
+printf '%s\n' "$1" >> "$CHECK_TEST_CALLS"
+if [ "$1" = build ]; then
+    [ "$2" = -o ] || exit 93
+    case "$3" in "$CHECK_TEST_SOURCE"/*) exit 93 ;; esac
+    [ -w "$(dirname "$3")" ] || exit 94
+fi
+[ "$1" != "$CHECK_TEST_FAIL" ] || exit 42
+if [ "$1" = test ]; then
+    [ "$2" = -json ] && [ "$3" = -count=1 ] && [ "$4" = ./... ] || exit 95
+    printf '{"Action":"pass","Package":"fixture"}\n'
+fi
+`
+			if err := os.WriteFile(filepath.Join(binaries, "go"), []byte(goStub), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(source, 0o550); err != nil {
+				t.Fatal(err)
+			}
+			defer os.Chmod(source, 0o750)
+			command := exec.Command("bash", filepath.Join(source, "setup.sh"), "check")
+			command.Dir = directory
+			command.Env = append(os.Environ(), "PATH="+binaries+string(os.PathListSeparator)+os.Getenv("PATH"), "CHECK_TEST_SOURCE="+source, "CHECK_TEST_CALLS="+filepath.Join(directory, "calls"), "CHECK_TEST_FAIL="+failAt)
+			output, runErr := command.CombinedOutput()
+			wantCalls := "build\nvet\ntest\n"
+			if failAt != "" {
+				if exit, ok := runErr.(*exec.ExitError); !ok || exit.ExitCode() != 42 {
+					t.Fatalf("check lost failure: %s, %v", output, runErr)
+				}
+				if failAt == "build" {
+					wantCalls = "build\n"
+				} else if failAt == "vet" {
+					wantCalls = "build\nvet\n"
+				}
+			} else if runErr != nil || !strings.Contains(string(output), `"Action":"pass"`) {
+				t.Fatalf("snapshot check: %s, %v", output, runErr)
+			}
+			calls, err := os.ReadFile(filepath.Join(directory, "calls"))
+			if err != nil || string(calls) != wantCalls {
+				t.Fatalf("commands=%q, want=%q, read error=%v", calls, wantCalls, err)
+			}
+		})
+	}
+}
+
 func TestSetupHelpWithoutUsername(t *testing.T) {
 	script, err := filepath.Abs("setup.sh")
 	if err != nil {

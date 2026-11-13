@@ -4,6 +4,11 @@ A Go HTTP service for a retail product catalogue, checkout pricing, promotions,
 and persistent order creation. Monetary values use integer cents and a currency
 code. The service does not process payments or manage fulfilment.
 
+[SERVICE_CONTRACT.md](SERVICE_CONTRACT.md) defines the business rules, retry
+semantics and execution evidence. It is the reference for functional correctness.
+Pricing includes automatic volume adjustments and fixed, percentage and
+product-specific promotions.
+
 ## Local setup
 
 Keep this checkout beside `truva-g3`. Bootstrap the shared Kind infrastructure
@@ -27,6 +32,7 @@ replacement or dependency on a sibling framework checkout for compilation.
 
 | Command | Purpose |
 | --- | --- |
+| `check` | Compilation, vet and JSON unit-test events from a checkout or source snapshot |
 | `build` | Isolated compilation, vet, and unit tests |
 | `deploy` | Build and deploy this service into the existing Kind cluster |
 | `rebuild` | Deploy with an uncached image build |
@@ -41,6 +47,51 @@ cluster; its context is `kind-$CLUSTER_NAME`. Help, offline builds, and sourcing
 repository helpers do not require username lookup or cluster access.
 The application listens on container port 8398 and is exposed at
 `http://retail-order-service.localhost`.
+
+`./setup.sh check` needs Go, Bash and Git (used by isolated unit-test fixtures).
+It requires no `.git` metadata, `.env`, sibling checkout, or running service.
+Build output goes to a temporary directory, so source may be mounted read-only.
+The Go module cache must contain the pinned dependencies or allow their download;
+set `GOCACHE` and `GOMODCACHE` to writable locations when needed. `build` and
+`deploy` run this same check before producing an application image. Live API
+checks remain separate in `smoke`.
+
+### Test a source snapshot or candidate
+
+Run from the repository or extracted source snapshot root:
+
+```bash
+bash ./setup.sh check
+```
+
+Capture the exit code, stdout and stderr. Test results are JSON lines from
+`go test -json -count=1`; a compilation, vet or test failure returns a nonzero
+exit code. HTTP unit tests exercise application handlers in-process with an
+in-memory store.
+
+To reproduce an issue, add a regression test derived from the applicable
+[service contract](SERVICE_CONTRACT.md) and run `check` against the original
+source. Confirm that the test fails at the intended assertion. Apply the proposed
+fix, keep the regression test identical, and run `check` again. The regression
+and full suite must pass. Tools execute this command through their approved
+runner configuration.
+
+### Verify the deployed service
+
+From a configured checkout with the shared Kind infrastructure running:
+
+```bash
+./setup.sh deploy
+./setup.sh smoke
+./setup.sh status
+./setup.sh logs
+```
+
+`deploy` builds, checks and starts this service. `smoke` sends synthetic requests,
+reads saved orders, and checks retries, validation and execution evidence. It
+retrieves the write token internally and prints request correlation IDs. Match
+those IDs to service logs and traces when investigating runtime behavior. Live
+checks run separately from CI.
 
 ### Use a fork or another checkout
 
@@ -91,8 +142,9 @@ a quantity, and an optional promotion code:
 }
 ```
 
-Prices come from the server catalogue, not the caller. `WELCOME100` subtracts
-100 cents once from the order subtotal, regardless of the number of items.
+Prices come from the server catalogue, not the caller. Volume adjustments apply
+before promotions. `WELCOME100`, `SAVE10` and `MUG15` have the conditions in
+[the service contract](SERVICE_CONTRACT.md#requests-and-pricing).
 Order IDs accept letters, digits, periods, underscores,
 colons, and hyphens, begin with a letter or digit, and have at most 128 characters.
 The catalogue publishes each product's maximum order quantity.
@@ -177,7 +229,8 @@ and request/trace/span correlation. HTTP tracing and metrics use
 excluded from tracing. IDs are correlation fields, not metric labels.
 
 `GET /build-info` exposes a SHA-256 manifest digest over root Go sources/tests,
-module files, Dockerfile, manifest, and setup script. The build revision combines
+module files, Dockerfile, manifest, setup script, service contract and smoke
+recipe. The build revision combines
 that source digest with the published framework module version. `git_revision` identifies
 the local parent commit; when `source_matches_commit` is false, the source is not
 claimed to be available at that commit. The generated manifest exists only in the

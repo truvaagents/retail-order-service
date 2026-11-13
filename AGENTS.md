@@ -4,7 +4,9 @@ This repository owns a Go retail order HTTP service. It is an ordinary
 application, not an agent or tool. Keep catalogue, pricing, and order semantics
 here rather than adding application-specific behavior to framework modules.
 
-Read ARCHITECTURE.md and README.md before changes. Always build and deploy through
+Read SERVICE_CONTRACT.md, ARCHITECTURE.md and README.md before changes. Use
+SERVICE_CONTRACT.md at the applicable revision for functional requirements.
+Always build and deploy through
 `./setup.sh`; inspect supported commands with `./setup.sh help`. The sibling
 `truva-g3` repository owns shared Kind, Redis, ingress, and observability. Never
 recreate or delete that infrastructure here. Preserve unrelated workloads and

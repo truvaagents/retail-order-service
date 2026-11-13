@@ -10,7 +10,8 @@ retrieval, or dependency on another application's Go packages.
 | File | Responsibility |
 | --- | --- |
 | `main.go` | Configuration, telemetry/client/logger ownership, HTTP lifecycle |
-| `catalog.go` | Catalogue selection, quantity policy, promotion resolution |
+| `catalog.go` | Catalogue selection and quantity validation |
+| `pricing.go` | Volume adjustments and promotion eligibility/calculation |
 | `checkout.go` | Checkout calculation |
 | `contract.go` | Request, product, order, receipt, and feed data types |
 | `service.go` | Routing, request processing, retries, and outcome observations |
@@ -20,6 +21,7 @@ retrieval, or dependency on another application's Go packages.
 
 Consumers define their own transport DTOs rather than importing this main
 package. Business rules stay application-owned, not in framework modules.
+The normative behavior is defined in [SERVICE_CONTRACT.md](SERVICE_CONTRACT.md).
 
 ## Order processing and storage
 
@@ -82,6 +84,9 @@ confirming that the recorded commit is available there.
 
 This repository owns only `retail-order-service` resources. Its setup script
 reuses the sibling framework's existing Kind infrastructure and does not rebuild,
-restart, or delete other applications. Compilation, vet, and unit tests run with
-`setup.sh build`; `setup.sh smoke` performs separate live API checks. Framework
+restart, or delete other applications. `setup.sh check` runs compilation, vet and
+JSON unit-test events without checkout metadata or cluster access, with build
+output outside the source tree. `build` and image deployment reuse it inside the
+isolated snapshot. The snapshot digest includes the service contract and smoke
+recipe. `setup.sh smoke` performs separate live API checks. Framework
 modules and CI contracts are not modified by this application.

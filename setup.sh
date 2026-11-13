@@ -8,7 +8,8 @@ BUILD_CONTEXT_DIR=''
 
 usage() {
     printf '%s\n' 'Retail order service — order API' \
-        'Usage: ./setup.sh <help|build|deploy|rebuild|rollout|smoke|status|logs>' \
+        'Usage: ./setup.sh <help|check|build|deploy|rebuild|rollout|smoke|status|logs>' \
+        'check: compile, vet and JSON unit-test events; no .git, .env or cluster required.' \
         'build: isolated source build, vet and unit tests; no cluster required.' \
         'deploy/rebuild: build, load and deploy only retail-order-service.' \
         'rollout: update target configuration and restart; no code build.' \
@@ -21,6 +22,19 @@ kubectl() { command kubectl --context "$KIND_CONTEXT" "$@"; }
 load_config() {
     if [ -f "$SCRIPT_DIR/.env" ]; then set -a; source "$SCRIPT_DIR/.env"; set +a; fi
 }
+
+check() (
+    local check_directory
+    check_directory="$(mktemp -d "${TMPDIR:-/tmp}/retail-order-check.XXXXXX")"
+    trap 'rm -rf -- "$check_directory"' EXIT
+    cd "$SCRIPT_DIR"
+    export GOWORK=off
+    export GOFLAGS="${GOFLAGS:-} -mod=readonly"
+    export GOCACHE="${GOCACHE:-$check_directory/go-cache}"
+    go build -o "$check_directory/retail-order-service" .
+    go vet ./...
+    go test -json -count=1 ./...
+)
 
 validate_build_repository() {
     local repository="$1" owner name
@@ -107,11 +121,11 @@ prepare_snapshot() {
         cd "$SCRIPT_DIR"
         # Explicit root-level source/recipe allowlist: never copy credentials,
         # Git metadata, notes, debug artifacts or a sibling example package.
-        local files=(*.go go.mod go.sum Dockerfile.workspace k8-deployment.yaml setup.sh)
+        local files=(*.go go.mod go.sum Dockerfile.workspace k8-deployment.yaml setup.sh smoke.mjs SERVICE_CONTRACT.md)
         # Comparing only copied files misses deletions: a commit containing an
         # additional .go file is not the same source tree as this snapshot.
         printf '%s\n' "${files[@]}" | LC_ALL=C sort > "$BUILD_CONTEXT_DIR/source-inputs"
-        git ls-tree --name-only "$git_revision" | awk '/\.go$/ || /^(go.mod|go.sum|Dockerfile.workspace|k8-deployment.yaml|setup.sh)$/' | LC_ALL=C sort > "$BUILD_CONTEXT_DIR/committed-inputs"
+        git ls-tree --name-only "$git_revision" | awk '/\.go$/ || /^(go.mod|go.sum|Dockerfile.workspace|k8-deployment.yaml|setup.sh|smoke.mjs|SERVICE_CONTRACT.md)$/' | LC_ALL=C sort > "$BUILD_CONTEXT_DIR/committed-inputs"
         if ! cmp -s "$BUILD_CONTEXT_DIR/source-inputs" "$BUILD_CONTEXT_DIR/committed-inputs"; then matches=false; fi
         for file in "${files[@]}"; do
             [[ "$file" =~ ^[A-Za-z0-9_.-]+$ ]] && [ -f "$file" ] && [ ! -L "$file" ] || {
@@ -172,13 +186,14 @@ if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
 [ "$#" -le 1 ] || { usage >&2; exit 2; }
 case "${1:-help}" in
     help|-h|--help) usage; exit ;;
-    build|deploy|rebuild|rollout|smoke|status|logs) verb="$1" ;;
+    check|build|deploy|rebuild|rollout|smoke|status|logs) verb="$1" ;;
     *) usage >&2; exit 2 ;;
 esac
+if [ "$verb" = check ]; then check; exit; fi
 load_config
 if [ "$verb" = build ]; then
     prepare_snapshot
-    (cd "$BUILD_CONTEXT_DIR/retail-order-service" && GOWORK=off GOFLAGS=-mod=readonly go build ./... && GOWORK=off go vet ./... && GOWORK=off go test ./...)
+    bash "$BUILD_CONTEXT_DIR/retail-order-service/setup.sh" check
     exit
 fi
 require_cluster
@@ -193,6 +208,7 @@ case "$verb" in
             source "$FRAMEWORK_ROOT/examples/k8-deployment/setup-env-lib.sh"
             truvag3_check_prerequisites
             prepare_snapshot
+            bash "$BUILD_CONTEXT_DIR/retail-order-service/setup.sh" check
             cache_flag=''
             [ "$verb" != rebuild ] || cache_flag=--no-cache
             truvag3_build_docker retail-order-service:latest "$BUILD_CONTEXT_DIR/retail-order-service/Dockerfile.workspace" "$BUILD_CONTEXT_DIR" "$cache_flag"
