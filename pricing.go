@@ -37,7 +37,7 @@ func orderDiscount(product Product, quantity int, code string) (int, error) {
 	subtotal := product.UnitPrice * quantity
 	volumePercent := 0
 	for _, tier := range volumeTiers {
-		if quantity > tier.MinimumQuantity {
+		if quantity >= tier.MinimumQuantity {
 			volumePercent = tier.Percent
 		}
 	}
