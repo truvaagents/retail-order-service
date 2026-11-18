@@ -52,9 +52,10 @@ func orderDiscount(product Product, quantity int, code string) (int, error) {
 	if subtotal < selected.MinimumSubtotal || !strings.HasPrefix(product.SKU, selected.SKUPrefix) {
 		return 0, errors.New("promotion_not_eligible")
 	}
-	discount += selected.FixedCents + percentageDiscount(subtotal-discount, selected.Percent)
-	if selected.MaximumDiscount > 0 && discount > selected.MaximumDiscount {
-		discount = selected.MaximumDiscount
+	promotionDiscount := selected.FixedCents + percentageDiscount(subtotal-discount, selected.Percent)
+	if selected.MaximumDiscount > 0 && promotionDiscount > selected.MaximumDiscount {
+		promotionDiscount = selected.MaximumDiscount
 	}
+	discount += promotionDiscount
 	return min(discount, subtotal), nil
 }
