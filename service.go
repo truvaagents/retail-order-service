@@ -37,7 +37,7 @@ func (s *service) routes() http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	mux.HandleFunc("GET /catalog", func(w http.ResponseWriter, r *http.Request) { WriteJSON(w, http.StatusOK, catalog) })
+	mux.HandleFunc("GET /catalog", serveCatalog)
 	mux.HandleFunc("POST /orders", s.createOrder)
 	mux.HandleFunc("GET /orders/{id}", s.order)
 	mux.HandleFunc("GET /evidence/{id}", s.evidence)
