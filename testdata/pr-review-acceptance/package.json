@@ -1,0 +1,9 @@
+{
+  "name": "pr-review-acceptance",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "is-number": "7.0.0",
+    "left-pad": "1.3.0"
+  }
+}
